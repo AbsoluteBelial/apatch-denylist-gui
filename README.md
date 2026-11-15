@@ -15,6 +15,7 @@
 ### 功能
 
 - 列出所有第三方应用,每个 App 一个开关,打开即隐藏 Root
+- **多语言界面**:简体中文、繁體中文、English、日本語、한국어、Русский、Español。首次打开按系统语言自动选择,右上角可随时切换,选择会被记住
 - 按包名搜索,按「全部 / 已隐藏 / 未隐藏」筛选,可选显示系统应用(已隐藏 Root 的系统应用总是显示)
 - **扫描崩溃**:读取本次开机以来的 crash 日志,列出崩溃过、但还没隐藏 Root 的 App,并标注原因:
   - `PairIP`:崩溃发生在 `libpairipcore.so`,即 Google Play 的 PairIP 防篡改检测到注入环境
@@ -50,6 +51,16 @@
 1. 打开目标 App 的开关(变绿即已加入 denylist)
 2. 遇到新的闪退 App:先打开它让它崩一次,再点「扫描崩溃」,把列出的 App 打开开关
 3. 点顶部「立即重启」。**改动需要重启才生效**,因为 Zygisk Next 在开机时读取名单
+
+### 新增或修改翻译
+
+所有界面文字都在 `module/webroot/index.html` 顶部的 `I18N` 对象里:
+
+1. 复制 `"en"` 整块,键名改成语言代码(如 `"de"`、`"pt-BR"`),`_name` 写该语言的自称(如 `Deutsch`)
+2. 翻译各个值;`{n}`、`{p}`、`{e}` 是占位符,要原样保留。`sub`、`pending`、`noBridge` 里只允许 `<b>` 和 `<br>`
+3. 缺失的键会自动回退到英文,所以可以先翻译一部分
+
+欢迎提交 PR 补充语言或改进翻译。
 
 ### 命令行
 
@@ -112,11 +123,12 @@ It is meant for setups where you want root, but banking, payment or Play-integri
 ### Features
 
 - Lists all user apps, one switch per app; on means root is hidden from that app
+- **Multilingual UI**: 简体中文, 繁體中文, English, 日本語, 한국어, Русский, Español. Picks your system language on first launch; switch any time from the menu in the top-right corner, and your choice is remembered
 - Search by package name, filter by All / Hidden / Not hidden, optionally show system apps (system apps that already have root hidden are always shown)
 - **Crash scan**: reads the crash log since boot and lists apps that crashed but don't have root hidden yet, tagged by cause:
   - `PairIP`: the crash is in `libpairipcore.so`, meaning Google Play's PairIP anti-tamper detected the injected environment
-  - `防Root` (root check): a `TerminateException`, where the app detected root and quit on purpose
-  - `崩溃` (crash): any other cause
+  - `Root check`: a `TerminateException`, where the app detected root and quit on purpose
+  - `Crash`: any other cause
 - Shows how many changes are waiting for a reboot, with a one-tap reboot button
 - Backs up `package_config` before the first change after each boot (keeps the last 10)
 
@@ -145,8 +157,18 @@ It is meant for setups where you want root, but banking, payment or Play-integri
 ### Usage
 
 1. Turn on the switch for the target app (green means it is on the denylist)
-2. For a newly crashing app: launch it once so it crashes, tap **扫描崩溃** (Crash scan), then turn on the switches for the apps it lists
-3. Tap **立即重启** (Reboot now). **Changes need a reboot** because Zygisk Next reads the list at boot
+2. For a newly crashing app: launch it once so it crashes, tap **Crash scan**, then turn on the switches for the apps it lists
+3. Tap **Reboot now**. **Changes need a reboot** because Zygisk Next reads the list at boot
+
+### Adding or editing a translation
+
+All UI text lives in the `I18N` object at the top of `module/webroot/index.html`:
+
+1. Copy the whole `"en"` block, rename the key to the language code (such as `"de"` or `"pt-BR"`), and set `_name` to the language's own name (such as `Deutsch`)
+2. Translate the values. Keep the `{n}`, `{p}` and `{e}` placeholders as they are. `sub`, `pending` and `noBridge` may contain only `<b>` and `<br>`
+3. Missing keys fall back to English, so a partial translation works
+
+Pull requests adding languages or improving translations are welcome.
 
 ### Command line
 
