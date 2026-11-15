@@ -1,0 +1,15 @@
+#!/sbin/sh
+# Standard module installer stub. APatch / KernelSU use their own installer;
+# this only matters when flashed through Magisk or a recovery.
+umask 022
+ui_print() { echo "$1"; }
+OUTFD=$2
+ZIPFILE=$3
+mount /data 2>/dev/null
+if [ ! -f /data/adb/magisk/util_functions.sh ]; then
+  ui_print "*** Please install from the APatch / KernelSU / Magisk manager ***"
+  exit 1
+fi
+. /data/adb/magisk/util_functions.sh
+install_module
+exit 0

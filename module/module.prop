@@ -1,0 +1,6 @@
+id=denylist_gui
+name=Denylist GUI (APatch)
+version=v1.0
+versionCode=1
+author=AbsoluteBelial
+description=可视化管理 APatch denylist(package_config exclude=1)：勾选即对该 App 隐藏 Root，可扫描最近崩溃应用一键加入。改动需重启生效。

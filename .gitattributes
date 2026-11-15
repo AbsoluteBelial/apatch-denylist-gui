@@ -1,0 +1,5 @@
+# Files that run on Android must keep LF line endings, even on a Windows checkout
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary

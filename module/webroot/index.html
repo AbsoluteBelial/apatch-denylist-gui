@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Denylist GUI</title>
+<style>
+  :root { --bg:#121417; --card:#1c1f24; --line:#2a2e35; --fg:#e8eaed; --dim:#9aa0a6;
+          --on:#34a853; --warn:#f9ab00; --bad:#ea4335; --acc:#8ab4f8; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.4 system-ui,-apple-system,"Noto Sans SC",sans-serif;
+         padding:env(safe-area-inset-top) 0 80px; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); padding:14px 14px 8px;
+           border-bottom:1px solid var(--line); }
+  h1 { font-size:18px; margin:0 0 2px; }
+  .sub { color:var(--dim); font-size:12px; }
+  .bar { display:flex; gap:8px; margin-top:10px; }
+  input[type=search] { flex:1; background:var(--card); color:var(--fg); border:1px solid var(--line);
+         border-radius:10px; padding:10px 12px; font-size:15px; outline:none; }
+  .seg { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .chip { background:var(--card); border:1px solid var(--line); color:var(--dim);
+          border-radius:999px; padding:6px 12px; font-size:13px; }
+  .chip.act { color:var(--bg); background:var(--acc); border-color:var(--acc); }
+  button { font:inherit; cursor:pointer; }
+  .btn { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:10px;
+         padding:9px 12px; font-size:14px; white-space:nowrap; }
+  .btn.pri { background:var(--acc); color:#10151c; border-color:var(--acc); font-weight:600; }
+  .btn.sm { padding:5px 10px; font-size:13px; }
+  #banner { display:none; margin:10px 14px 0; padding:10px 12px; border-radius:10px;
+            background:#3a2f0b; color:#fde293; font-size:13px; align-items:center; gap:10px; }
+  #banner.show { display:flex; }
+  #banner span { flex:1; }
+  #scanBox { display:none; margin:10px 14px 0; background:var(--card); border:1px solid var(--line);
+             border-radius:12px; padding:10px 12px; }
+  #scanBox.show { display:block; }
+  #scanBox h3 { margin:0 0 6px; font-size:14px; }
+  ul { list-style:none; margin:8px 0 0; padding:0; }
+  li.app { display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--line); }
+  li.app .name { flex:1; min-width:0; word-break:break-all; font-size:14px; }
+  li.app .name small { display:block; color:var(--dim); font-size:11px; margin-top:2px; }
+  .tag { font-size:11px; border-radius:6px; padding:1px 6px; margin-left:6px; vertical-align:1px; }
+  .tag.pairip { background:#3b1d1d; color:#f28b82; }
+  .tag.rootcheck { background:#3a2f0b; color:#fde293; }
+  .tag.other { background:#26292f; color:var(--dim); }
+  /* 开关 */
+  .sw { position:relative; width:46px; height:26px; flex:none; }
+  .sw input { opacity:0; width:0; height:0; }
+  .sw i { position:absolute; inset:0; background:#3c4043; border-radius:26px; transition:.18s; }
+  .sw i::before { content:""; position:absolute; width:20px; height:20px; left:3px; top:3px;
+                  background:#fff; border-radius:50%; transition:.18s; }
+  .sw input:checked + i { background:var(--on); }
+  .sw input:checked + i::before { transform:translateX(20px); }
+  .sw input:disabled + i { opacity:.5; }
+  #msg { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#303134;
+         color:var(--fg); padding:9px 14px; border-radius:10px; font-size:13px; opacity:0;
+         transition:opacity .2s; pointer-events:none; max-width:90%; }
+  #msg.show { opacity:1; }
+  .empty { color:var(--dim); text-align:center; padding:30px 14px; }
+  .err { color:#f28b82; padding:20px 14px; line-height:1.6; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Denylist GUI</h1>
+  <div class="sub">开关打开 = 对该 App 隐藏 Root(干净环境，不注入模块)。改动需<b>重启</b>生效。</div>
+  <div class="bar">
+    <input id="q" type="search" placeholder="搜索包名…" autocomplete="off">
+    <button class="btn" id="scanBtn">扫描崩溃</button>
+  </div>
+  <div class="seg" id="seg">
+    <button class="chip act" data-f="all">全部 <b id="cAll">0</b></button>
+    <button class="chip" data-f="on">已隐藏 <b id="cOn">0</b></button>
+    <button class="chip" data-f="off">未隐藏 <b id="cOff">0</b></button>
+    <button class="chip" id="sysBtn" style="margin-left:auto">系统:关</button>
+  </div>
+</header>
+
+<div id="banner"><span>有 <b id="pending">0</b> 项改动待重启生效</span>
+  <button class="btn sm pri" id="rebootBtn">立即重启</button></div>
+
+<div id="scanBox"><h3>本次开机以来崩溃过、且未隐藏的 App</h3><ul id="scanList"></ul></div>
+
+<ul id="list"><li class="empty">加载中…</li></ul>
+<div id="msg"></div>
+
+<script>
+const CTL = "sh /data/adb/modules/denylist_gui/denyctl.sh";
+const state = new Map();   // pkg -> 0/1
+const sys = new Set();     // 系统应用
+let filter = "all", changed = 0, showSys = false;
+// 默认隐藏系统应用，但已加入 denylist 的系统应用始终显示
+const visible = p => showSys || !sys.has(p) || state.get(p) === 1;
+
+// KernelSU / APatch WebUI 桥：ksu.exec(cmd, optionsJson, callbackName) -> cb(errno, stdout, stderr)
+function sh(cmd) {
+  return new Promise((resolve, reject) => {
+    if (!window.ksu || typeof ksu.exec !== "function") return reject(new Error("no-bridge"));
+    const cb = "__dg" + Date.now() + Math.floor(Math.random() * 1e6);
+    window[cb] = (errno, stdout, stderr) => {
+      delete window[cb];
+      Number(errno) === 0 ? resolve(stdout || "") : reject(new Error(stderr || "errno " + errno));
+    };
+    try { ksu.exec(cmd, "{}", cb); } catch (e) { delete window[cb]; reject(e); }
+  });
+}
+const safe = p => /^[A-Za-z0-9._]+$/.test(p);   // 防注入：只接受合法包名
+
+function toast(t) {
+  const m = document.getElementById("msg"); m.textContent = t; m.classList.add("show");
+  clearTimeout(toast.t); toast.t = setTimeout(() => m.classList.remove("show"), 1800);
+  try { ksu.toast && ksu.toast(t); } catch (e) {}
+}
+function bump() {
+  changed++; document.getElementById("pending").textContent = changed;
+  document.getElementById("banner").classList.add("show");
+}
+function counts() {
+  let all = 0, on = 0;
+  state.forEach((v, p) => { if (visible(p)) { all++; on += v; } });
+  cAll.textContent = all; cOn.textContent = on; cOff.textContent = all - on;
+}
+
+function row(pkg, tag) {
+  const li = document.createElement("li"); li.className = "app"; li.dataset.pkg = pkg;
+  const name = document.createElement("div"); name.className = "name"; name.textContent = pkg;
+  if (sys.has(pkg)) { const s = document.createElement("span"); s.className = "tag other"; s.textContent = "系统"; name.appendChild(s); }
+  if (tag) {
+    const t = document.createElement("span"); t.className = "tag " + tag;
+    t.textContent = { pairip: "PairIP", rootcheck: "防Root", other: "崩溃" }[tag] || tag;
+    name.appendChild(t);
+  }
+  const lab = document.createElement("label"); lab.className = "sw";
+  const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = state.get(pkg) === 1;
+  cb.onchange = () => setPkg(pkg, cb.checked, cb);
+  lab.append(cb, document.createElement("i"));
+  li.append(name, lab);
+  return li;
+}
+
+function render() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const ul = document.getElementById("list"); ul.innerHTML = "";
+  const items = [...state.keys()]
+    .filter(visible)
+    .filter(p => !q || p.toLowerCase().includes(q))
+    .filter(p => filter === "all" || (filter === "on") === (state.get(p) === 1))
+    .sort((a, b) => (state.get(b) - state.get(a)) || a.localeCompare(b));
+  if (!items.length) { ul.innerHTML = '<li class="empty">没有匹配的 App</li>'; return; }
+  const frag = document.createDocumentFragment();
+  items.forEach(p => frag.appendChild(row(p)));
+  ul.appendChild(frag);
+}
+
+async function setPkg(pkg, on, el) {
+  if (!safe(pkg)) return toast("包名不合法");
+  el && (el.disabled = true);
+  try {
+    const out = await sh(`${CTL} ${on ? "add" : "del"} ${pkg}`);
+    if (!out.includes("OK")) throw new Error(out || "无返回");
+    state.set(pkg, on ? 1 : 0); bump(); counts();
+    toast((on ? "已隐藏 Root：" : "已取消隐藏：") + pkg);
+    document.querySelectorAll(`li.app[data-pkg="${pkg}"] input`).forEach(i => i.checked = on);
+    if (filter !== "all") render();
+  } catch (e) {
+    toast("失败：" + e.message);
+    el && (el.checked = !on);
+  } finally { el && (el.disabled = false); }
+}
+
+async function load() {
+  try {
+    const out = await sh(`${CTL} list`);
+    state.clear(); sys.clear();
+    out.split("\n").forEach(l => {
+      const [p, f, k] = l.trim().split("|");
+      if (!p || !safe(p)) return;
+      state.set(p, f === "1" ? 1 : 0);
+      if (k === "s") sys.add(p);
+    });
+    counts(); render();
+  } catch (e) {
+    document.getElementById("list").innerHTML = e.message === "no-bridge"
+      ? '<li class="err">未检测到 WebUI 桥(ksu.exec)。<br>请在 <b>APatch → 模块 → Denylist GUI → 打开</b> 中使用本界面；若 APatch 版本不支持 WebUI，可用 WebUI X / KsuWebUI 打开本模块。</li>'
+      : '<li class="err">读取失败：' + e.message.replace(/</g, "&lt;") + '</li>';
+  }
+}
+
+async function scan() {
+  const box = document.getElementById("scanBox"), ul = document.getElementById("scanList");
+  box.classList.add("show"); ul.innerHTML = '<li class="empty">扫描中…</li>';
+  try {
+    const out = await sh(`${CTL} scan`);
+    const hits = out.split("\n").map(l => l.trim().split("|")).filter(([p]) => p && safe(p) && state.has(p) && state.get(p) !== 1);
+    ul.innerHTML = "";
+    if (!hits.length) { ul.innerHTML = '<li class="empty">没有发现未隐藏的崩溃 App 👍</li>'; return; }
+    hits.forEach(([p, t]) => ul.appendChild(row(p, t)));
+  } catch (e) { ul.innerHTML = '<li class="err">扫描失败：' + e.message.replace(/</g, "&lt;") + '</li>'; }
+}
+
+document.getElementById("q").oninput = render;
+document.getElementById("scanBtn").onclick = scan;
+document.getElementById("sysBtn").onclick = e => {
+  e.stopPropagation(); showSys = !showSys;
+  e.currentTarget.textContent = "系统:" + (showSys ? "开" : "关");
+  e.currentTarget.classList.toggle("act", showSys);
+  counts(); render();
+};
+document.getElementById("seg").onclick = e => {
+  const b = e.target.closest(".chip[data-f]"); if (!b) return;
+  filter = b.dataset.f; document.querySelectorAll(".chip[data-f]").forEach(c => c.classList.toggle("act", c === b)); render();
+};
+document.getElementById("rebootBtn").onclick = () => {
+  if (confirm("现在重启手机让 denylist 生效？")) sh("svc power reboot || reboot").catch(e => toast("重启失败：" + e.message));
+};
+load();
+</script>
+</body>
+</html>
